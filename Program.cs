@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,16 +15,28 @@ using ServeurIa.Modules.Search.Pages;
 using ServeurIa.Modules.Search.Providers;
 using SearxngResearchMcp;
 
-var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+var bootstrap = new ConfigurationManager();
+bootstrap.AddEnvironmentVariables("RESEARCH_MCP_").AddCommandLine(args);
+var http = bootstrap["Transport"] switch
+{
+    "http" => true,
+    "stdio" or null => false,
+    _ => throw new InvalidOperationException("Transport must be http or stdio."),
+};
+
+var web = http ? WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory }) : null;
+var stdio = http ? null : Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
     ContentRootPath = AppContext.BaseDirectory,
     DisableDefaults = true,
 });
+IHostApplicationBuilder builder = (IHostApplicationBuilder?)web ?? stdio!;
 
 builder.Configuration
     .AddJsonFile("appsettings.local.json", optional: true)
     .AddEnvironmentVariables("RESEARCH_MCP_")
     .AddCommandLine(args);
+
 if (builder.Configuration["config"] is { } configPath)
 {
     builder.Configuration
@@ -59,7 +73,7 @@ builder.Services.AddSingleton<IWebFetcher>(sp =>
         : direct;
 });
 
-builder.Services.AddHttpClient(SearxngProvider.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(20))
+builder.Services.AddHttpClient(SearxngProvider.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(35))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient<ILlmClient, OpenAiClient>(client => client.Timeout = Timeout.InfiniteTimeSpan)
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
@@ -68,6 +82,18 @@ builder.Services.AddSingleton<IPageRenderer, PlaywrightRenderer>();
 builder.Services.AddHostedService<BrowserProxyService>();
 builder.Services.AddSingleton<PageService>();
 builder.Services.AddTransient<ResearchAgent>();
-builder.Services.AddMcpServer().WithStdioServerTransport().WithTools<SearchTools>();
-
-await builder.Build().RunAsync();
+var mcp = builder.Services.AddMcpServer().WithTools<SearchTools>();
+if (web is not null)
+{
+    builder.Configuration["AllowedHosts"] ??= "127.0.0.1;localhost;[::1]";
+    web.WebHost.UseUrls(builder.Configuration["HttpUrl"] ?? "http://127.0.0.1:8765");
+    mcp.WithHttpTransport();
+    var app = web.Build();
+    app.MapMcp("/mcp");
+    await app.RunAsync();
+}
+else
+{
+    mcp.WithStdioServerTransport();
+    await stdio!.Build().RunAsync();
+}

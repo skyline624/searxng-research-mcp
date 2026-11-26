@@ -8,3 +8,8 @@
 !Llm/
 !Llm/**
 !.dockerignore
+
+!deploy/
+!deploy/start.sh
+!deploy/searxng/
+!deploy/searxng/settings.yml

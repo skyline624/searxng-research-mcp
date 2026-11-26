@@ -8,6 +8,7 @@ using ServeurIa.Core.Llm;
 using ServeurIa.Core.Tasks;
 using ServeurIa.Modules.Search;
 using ServeurIa.Modules.Search.Agent;
+using ServeurIa.Modules.Search.Pages;
 using ServeurIa.Modules.Search.Providers;
 
 namespace SearxngResearchMcp;
@@ -27,6 +28,7 @@ public sealed class SearchTools(
     ISearchProvider provider,
     ResearchAgent agent,
     ILlmClient llm,
+    PageService pages,
     IOptions<SearchOptions> searchOptions)
 {
     [McpServerTool(Name = "web_search", ReadOnly = true, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
@@ -70,6 +72,55 @@ public sealed class SearchTools(
                 result.Meta?.Corrections, result.Meta?.Suggestions);
         }
         catch (Exception error) when (error is SearchProviderException or ArgumentException)
+        {
+            throw new McpException(error.Message);
+        }
+    }
+
+    [McpServerTool(Name = "fetch_page", ReadOnly = true, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
+    [Description("Read a public web page, PDF, or Tor .onion address. Returns extracted text or markdown.")]
+    public async Task<PageContent> FetchPage(
+        [Description("An absolute http, https or onion URL.")] string url,
+        [Description("Requested length, 200 to 200000 characters. Default 20000.")] int? max_chars = null,
+        [Description("markdown (default) or text.")] string? format = null,
+        [Description("Force or disable JavaScript rendering on regular web pages. Defaults to auto.")] bool? render = null,
+        CancellationToken ct = default)
+    {
+        if (!Uri.TryCreate(Input(url, "URL", 4096), UriKind.Absolute, out var address) ||
+            address.Host.Length == 0 || address.Scheme is not ("http" or "https" or "onion"))
+        {
+            throw new McpException("Provide an absolute HTTP(S) URL or an onion:// address.");
+        }
+
+        var onion = OnionBlocklist.IsOnion(address.Host);
+        if (address.Scheme == "onion" && !onion)
+        {
+            throw new McpException("An onion:// URL must have a .onion hostname.");
+        }
+
+        if (onion && searchOptions.Value.TorProxy is null)
+        {
+            throw new McpException("Reading .onion pages requires a configured Tor proxy.");
+        }
+
+        if (format is not (null or "markdown" or "text"))
+        {
+            throw new McpException("Use markdown or text for format.");
+        }
+
+        try
+        {
+            var limit = Math.Clamp(max_chars ?? 20_000, 200, 200_000);
+            var page = await pages.GetAsync(new PageRequest(address, limit, render, RateKey: Guid.Empty.ToString("N")), ct);
+            if (format == "text")
+            {
+                var text = PageCleaner.ToText(page.Markdown);
+                return page with { Markdown = text.Length > limit ? text[..limit] : text, Truncated = page.Truncated || text.Length > limit };
+            }
+
+            return page;
+        }
+        catch (Exception error) when (SearchErrors.Describe(error) is not null)
         {
             throw new McpException(error.Message);
         }

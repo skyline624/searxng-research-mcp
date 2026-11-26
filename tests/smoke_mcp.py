@@ -124,7 +124,7 @@ def main():
                                     "clientInfo": {"name": "smoke", "version": "1"}}, 1)
                 send("notifications/initialized")
                 tools = send("tools/list", {}, 2)["tools"]
-                assert {tool["name"] for tool in tools} == {"web_search", "research"}, tools
+                assert {tool["name"] for tool in tools} == {"web_search", "fetch_page", "research"}, tools
                 web = send("tools/call", {"name": "web_search", "arguments": {
                     "query": "IANA reserved domains", "language": "en", "categories": ["web"], "engines": ["bing", "duckduckgo"],
                 }}, 3)
@@ -155,6 +155,15 @@ def main():
                     "query": "test", "categories": ["unknown"],
                 }}, 5)
                 assert bad.get("isError"), bad
+                page = send("tools/call", {"name": "fetch_page", "arguments": {
+                    "url": URL, "format": "text", "max_chars": 1000, "render": False,
+                }}, 6)
+                assert not page.get("isError"), page
+                assert "example" in page["structuredContent"]["markdown"].lower(), page
+                private = send("tools/call", {"name": "fetch_page", "arguments": {
+                    "url": "http://127.0.0.1/",
+                }}, 7)
+                assert private.get("isError"), private
                 print("MCP stdio, web_search, research, OpenAI stages and citation check passed.")
             finally:
                 server.stdin.close()

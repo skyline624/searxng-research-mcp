@@ -131,7 +131,7 @@ public sealed class PlaywrightRenderer(IOptions<SearchOptions> options, SafeFetc
             _browser = await _playwright.Chromium.ConnectAsync(options.Value.BrowserUrl!, new BrowserTypeConnectOptions { Timeout = 10_000 });
             return _browser;
         }
-        catch (Exception e) when (e is PlaywrightException or TimeoutException or IOException)
+        catch (Exception e) when (e is PlaywrightException or TimeoutException or IOException or System.ComponentModel.Win32Exception)
         {
             throw new BrowserException($"The browser companion is not reachable: {e.Message}", e);
         }

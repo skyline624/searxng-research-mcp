@@ -78,12 +78,13 @@ public sealed partial class ResearchAgent(ILlmClient llm, ISearchProvider provid
         var profile = ModeProfile.For(request.Mode);
         var timings = new Dictionary<string, long>();
         var clock = Stopwatch.StartNew();
+        long lastLap = 0;
         var warnings = new List<string>();
 
         // ---- plan
         await progress.ReportAsync(5, 100, "plan");
         var plan = await PlanAsync(accountId, request, profile, ct);
-        timings["plan"] = Lap(clock);
+        timings["plan"] = Lap();
 
         await progress.ReportAsync(15, 100, "search");
         var question = request.History is { Count: > 0 } ? string.Join(" ", plan.Queries) : request.Question;
@@ -140,7 +141,7 @@ public sealed partial class ResearchAgent(ILlmClient llm, ISearchProvider provid
             await sink.TraceChangedAsync(trace);
         }
 
-        timings["rank"] = Lap(clock);
+        timings["rank"] = Lap();
         if (selected.Count == 0)
         {
             return new ResearchResult(NothingFound(plan.Language), [], [.. warnings, "No readable result."], plan.Language, timings);
@@ -149,7 +150,7 @@ public sealed partial class ResearchAgent(ILlmClient llm, ISearchProvider provid
         // ---- write
         await progress.ReportAsync(75, 100, "write");
         var raw = await WriteAsync(accountId, request, plan.Language, selected, profile, sink, ct);
-        timings["write"] = Lap(clock);
+        timings["write"] = Lap();
 
         var checkedAnswer = CitationChecker.Check(raw, selected.Count);
         warnings.AddRange(checkedAnswer.Warnings);
@@ -158,7 +159,15 @@ public sealed partial class ResearchAgent(ILlmClient llm, ISearchProvider provid
         timings["total"] = clock.ElapsedMilliseconds;
         return new ResearchResult(checkedAnswer.Text, sources, warnings, plan.Language, timings);
 
-        void AddTiming(string key) => timings[key] = timings.GetValueOrDefault(key) + Lap(clock);
+        long Lap()
+        {
+            var elapsed = clock.ElapsedMilliseconds;
+            var duration = elapsed - lastLap;
+            lastLap = elapsed;
+            return duration;
+        }
+
+        void AddTiming(string key) => timings[key] = timings.GetValueOrDefault(key) + Lap();
 
         async Task ReadNextAsync(int budget)
         {
@@ -714,8 +723,6 @@ public sealed partial class ResearchAgent(ILlmClient llm, ISearchProvider provid
     }
 
     private static string Truncate(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
-
-    private static long Lap(Stopwatch clock) => clock.ElapsedMilliseconds;
 
     [GeneratedRegex("^[a-zA-Z]{2}$")]
     private static partial Regex LanguageCode();

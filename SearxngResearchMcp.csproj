@@ -8,7 +8,7 @@
   <ItemGroup>
     <Compile Remove="tests/**/*.cs" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="ModelContextProtocol" Version="2.4.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
     <PackageReference Include="AngleSharp" Version="1.10.4" />
     <PackageReference Include="Microsoft.Playwright" Version="1.64.1" />
     <PackageReference Include="PdfPig" Version="0.1.16" />

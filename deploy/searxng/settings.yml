@@ -62,9 +62,9 @@ logging:
 
 engines:
   - name: yacy
-    inactive: true
+    inactive: false
     disabled: false
-    base_url: http://yacy:8090
+    base_url: http://127.0.0.1:8090
     search_mode: local
     enable_http: true
     using_tor_proxy: false
@@ -81,8 +81,14 @@ engines:
     disabled: false
   # The onion index; its category (onions) keeps it out of the default queries.
   - name: ahmia
-    inactive: true
+    inactive: false
     disabled: false
+    timeout: 25.0
+    enable_http: true
+    using_tor_proxy: true
+    proxies:
+      all://:
+        - socks5h://127.0.0.1:9050
   # Kept as a network for the other Lemmy engines.
   - name: lemmy communities
-    disabled: true
+    disabled: false
