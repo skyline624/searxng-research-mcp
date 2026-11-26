@@ -65,7 +65,7 @@ engines:
     inactive: false
     disabled: false
     base_url: http://127.0.0.1:8090
-    search_mode: local
+    search_mode: global
     enable_http: true
     using_tor_proxy: false
     proxies: {}

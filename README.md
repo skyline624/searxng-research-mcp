@@ -53,7 +53,7 @@ Si l’API exige une clé, fournis aussi `OPENAI_API_KEY` dans ce fichier local.
 
 ### Moteurs et Tor
 
-La [configuration SearXNG](deploy/searxng/settings.yml) est embarquée dans l’image. Elle couvre le web généraliste, les actualités, la recherche scientifique, le code, les discussions, YaCy et Ahmia. Pour demander un moteur précis, passe son nom à `web_search`. Un index YaCy local peut renvoyer peu de résultats tant qu’il n’a pas été alimenté. Ahmia peut répondre lentement et dépend de son service distant et du réseau Tor. [API SearXNG](https://docs.searxng.org/dev/search_api.html)
+La [configuration SearXNG](deploy/searxng/settings.yml) est embarquée dans l’image. Elle couvre le web généraliste, les actualités, la recherche scientifique, le code, les discussions, YaCy et Ahmia. Pour demander un moteur précis, passe son nom à `web_search`. Par défaut, YaCy interroge son index local et les pairs de son réseau. Ahmia peut répondre lentement et dépend de son service distant et du réseau Tor. [API SearXNG](https://docs.searxng.org/dev/search_api.html)
 
 ### Mode stdio pour le développement
 
