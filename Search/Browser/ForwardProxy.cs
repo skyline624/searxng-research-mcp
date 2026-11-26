@@ -271,5 +271,5 @@ public sealed class BrowserProxyService(IOptions<SearchOptions> options, SafeFet
         return Task.CompletedTask;
     }
 
-    public void Dispose() => _proxy?.Dispose();
+    public void Dispose() => Interlocked.Exchange(ref _proxy, null)?.Dispose();
 }

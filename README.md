@@ -9,7 +9,7 @@ Serveur MCP local en .NET 10, autonome. Il expose deux outils via **stdio** et u
 
 ## Installation sur Windows
 
-Prérequis pour ce mode : SDK .NET 10, Docker Compose pour SearXNG et, pour `research`, un serveur LLM compatible avec `POST /v1/chat/completions`.
+Prérequis pour ce mode : PowerShell 7, SDK .NET 10, Docker Compose pour SearXNG et, pour `research`, un serveur LLM compatible avec `POST /v1/chat/completions`.
 
 ```powershell
 git clone https://github.com/skyline624/searxng-research-mcp.git
