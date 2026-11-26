@@ -1,0 +1,10 @@
+**
+!SearxngResearchMcp.csproj
+!Program.cs
+!Search/
+!Search/**
+!Web/
+!Web/**
+!Llm/
+!Llm/**
+!.dockerignore

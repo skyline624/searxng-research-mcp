@@ -1,0 +1,88 @@
+use_default_settings:
+  engines:
+    # Only these engines exist; the other ~200 of the image are dropped (fewer outgoing requests, nothing unexpected).
+    keep_only:
+      # general
+      - duckduckgo
+      - bing
+      - yacy
+      - brave
+      - ahmia              # indexes the .onion sites of the Tor network; answers only in the onions category,
+                           # and only through the Tor proxy (its queries go to Ahmia's .onion mirror)
+      - wikipedia          # answers as an infobox (summary of the article), not as a result list
+      # news
+      - bing news
+      - duckduckgo news
+      - brave.news
+      - wikinews
+      # science
+      - arxiv
+      - semantic scholar
+      - pubmed
+      - europepmc
+      - crossref
+      - openalex
+      # it
+      - github
+      - stackoverflow
+      - askubuntu
+      - superuser
+      - mdn
+      - docker hub
+      - pypi
+      - hackernews
+      # social media: thin without reddit; lemmy comments and posts reuse the network of lemmy communities
+      - lemmy communities
+      - lemmy posts
+      - lemmy comments
+
+general:
+  instance_name: SearXNG Research MCP
+  enable_metrics: false
+  # Wikipedia's API asks for a contact in the User-Agent.
+  contact_url: https://github.com/skyline624/searxng-research-mcp
+
+search:
+  safe_search: 0
+  autocomplete: ''
+  # MCP uses JSON. HTML is available for manual checks.
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+  image_proxy: false
+  # secret_key: set by SEARXNG_SECRET, never here.
+  method: GET
+
+# No query logging.
+logging:
+  level: WARNING
+
+engines:
+  - name: yacy
+    inactive: true
+    disabled: false
+    base_url: http://yacy:8090
+    search_mode: local
+    enable_http: true
+    using_tor_proxy: false
+    proxies: {}
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: crossref
+    disabled: false
+  - name: openalex
+    disabled: false
+  - name: hackernews
+    disabled: false
+  # The onion index; its category (onions) keeps it out of the default queries.
+  - name: ahmia
+    inactive: true
+    disabled: false
+  # Kept as a network for the other Lemmy engines.
+  - name: lemmy communities
+    disabled: true

@@ -1,0 +1,52 @@
+name: searxng-research-mcp
+services:
+  searxng:
+    image: searxng/searxng:2026.11.23-a7163d091@sha256:a7fc607aa6723f5a8982105bcc5ffba4d1b9fc7c6922a31a88d6e4cba49ef12a
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Generate a random secret in .env}
+    ports:
+      - "127.0.0.1:${SEARXNG_PORT:-18888}:8080"
+    volumes:
+      - "${SEARXNG_CONFIG_DIR:-./deploy/searxng}:/etc/searxng"
+      - "searxng-cache:/var/cache/searxng"
+
+  yacy:
+    profiles: [yacy]
+    image: yacy/yacy_search_server@sha256:4077e9d85ea13e3d2a29b63add60b109ccced191bebfc169d422dd50fca44c41
+    ports:
+      - "127.0.0.1:18090:8090"
+    volumes:
+      - "yacy-data:/opt/yacy_search_server/DATA"
+
+  playwright:
+    profiles: [browser]
+    build: ./deploy/playwright
+    networks: [browser]
+    init: true
+    shm_size: 1gb
+
+  mcp:
+    profiles: [browser]
+    build: .
+    init: true
+    depends_on: [searxng, playwright]
+    networks: [default, browser]
+    environment:
+      RESEARCH_MCP_Search__SearxngUrl: http://searxng:8080
+      RESEARCH_MCP_Search__BrowserUrl: ws://playwright:3000/
+      RESEARCH_MCP_Search__BrowserProxyUrl: http://mcp:3128
+      RESEARCH_MCP_Search__BrowserProxyListenAddress: 0.0.0.0
+    env_file:
+      - path: .env.llm
+        required: false
+    volumes:
+      - "./appsettings.local.json:/config/appsettings.json:ro"
+    command: ["--config", "/config/appsettings.json"]
+
+networks:
+  browser:
+    internal: true
+
+volumes:
+  searxng-cache:
+  yacy-data:
