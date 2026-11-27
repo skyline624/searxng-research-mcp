@@ -1,25 +1,22 @@
 # SearXNG Research MCP
 
-Serveur MCP à démarrer avec **un seul conteneur Docker**. L’image contient le code .NET 10 ainsi que SearXNG, l’index local YaCy, Tor et Playwright/Chromium. Tous démarrent automatiquement. Les indexeurs distants et le réseau Tor sont interrogés à la demande. Le LLM, utilisé par `research`, est fourni par une API compatible OpenAI.
+A self-hosted **Model Context Protocol (MCP) server** for web search, page and PDF extraction, and multi-step research with numbered citations. A single Docker container runs the .NET 10 server, SearXNG, YaCy, Tor, and Playwright/Chromium. The `research` tool uses an OpenAI-compatible API, so you can connect a local LLM.
 
-| Outil | Fonction |
+| MCP tool | What it does |
 | --- | --- |
-| `web_search` | Renvoie les liens, les extraits et les moteurs indisponibles. Filtres par langue, catégorie, moteur, période et page. La catégorie `onion` interroge Ahmia via Tor. |
-| `fetch_page` | Lit une URL publique HTTP(S), un PDF ou une URL `.onion`. Renvoie le texte ou le Markdown. Playwright rend les pages web JavaScript sur demande ou quand le texte initial est trop court. Les pages `.onion` sont lues via le proxy SOCKS5 local de Tor. |
-| `research` | Planifie les requêtes, lit les sources, affine la recherche, classe les passages et rédige une réponse avec des citations numérotées. |
+| `web_search` | Returns links, snippets, and unavailable search engines. Filter by language, category, engine, date range, or result page. The `onion` category searches Ahmia over Tor. |
+| `fetch_page` | Extracts text or Markdown from public HTTP(S) pages, PDFs, and `.onion` pages. Playwright renders JavaScript pages on request or when the initial page contains too little text. Tor handles `.onion` requests through its local SOCKS5 proxy. |
+| `research` | Plans search queries, reads sources, refines the search, ranks passages, and writes an answer with numbered citations. |
 
-## Démarrage
+## Quick start
 
 ```sh
 git clone https://github.com/skyline624/searxng-research-mcp.git
 cd searxng-research-mcp
 docker compose up -d --build
-docker compose logs -f mcp
 ```
 
-Le volume Docker conserve l’index YaCy, l’état de Tor et le secret SearXNG, généré au premier démarrage. Seul le port MCP est publié sur la boucle locale. Tu peux changer son port hôte en définissant `MCP_PORT` dans `.env`.
-
-Dans le client MCP, ajoute l’URL **`http://127.0.0.1:8765/mcp`** avec le transport **Streamable HTTP**. Pour un client local qui accepte la forme suivante :
+Add the server to your MCP client at **`http://127.0.0.1:8765/mcp`** using **Streamable HTTP**. Here is an example for clients that use `mcpServers` in their JSON configuration.
 
 ```json
 {
@@ -32,32 +29,50 @@ Dans le client MCP, ajoute l’URL **`http://127.0.0.1:8765/mcp`** avec le trans
 }
 ```
 
-Compose accorde `NET_ADMIN` pour installer le pare-feu dans le conteneur. Playwright s’exécute sous un utilisateur dédié. Ses seules nouvelles connexions réseau passent par le proxy filtrant local du MCP, qui vérifie les adresses publiques. Les autres services s’exécutent également sous des utilisateurs dédiés. Le serveur demande que la liste de blocage d’Ahmia ait été chargée avant de renvoyer ou de lire des URL `.onion`.
+Use `docker compose logs -f mcp` to follow startup. Docker publishes the MCP port on the loopback interface. Set `MCP_PORT` in `.env` to use a different host port. A Docker volume stores the YaCy index, Tor state, and the SearXNG secret generated on the first startup.
 
-### Configurer le LLM
+### Example tool calls
 
-Pour Docker, crée un fichier local `.env.llm` avec les valeurs de ton API, puis lance `docker compose up -d`.
+These are the arguments to pass from your MCP client.
+
+| Tool | Example arguments |
+| --- | --- |
+| `web_search` | `{"query":"IANA reserved domains","max_results":5}` |
+| `fetch_page` | `{"url":"https://www.iana.org/domains/reserved","format":"markdown"}` |
+| `research` | `{"question":"Why does IANA reserve example domains?","mode":"balanced"}` |
+
+## Configure the LLM for research
+
+Configure an OpenAI-compatible `/v1/chat/completions` API to use `research`. You can use `web_search` and `fetch_page` as soon as the server starts.
+
+Create a local `.env.llm` file, then run `docker compose up -d`. This example points to a model server running on the Docker Desktop host.
 
 ```dotenv
 RESEARCH_MCP_OpenAI__BaseUrl=http://host.docker.internal:11434/v1
-RESEARCH_MCP_OpenAI__Model=identifiant-du-modele
+RESEARCH_MCP_OpenAI__Model=your-model-id
 ```
 
-Si l’API exige une clé, fournis aussi `OPENAI_API_KEY` dans ce fichier local. Si son certificat HTTPS est signé par une autorité privée ou autosigné, place le **certificat public** au format PEM dans `certificates/` avec l’extension `.crt`, puis recrée le conteneur. Le certificat doit couvrir le nom ou l’adresse utilisé dans `BaseUrl`. Les extraits lus et l’historique transmis sont envoyés au LLM configuré.
+- Set `OPENAI_API_KEY` in `.env.llm` if your API requires a key.
+- Set `RESEARCH_MCP_OpenAI__AnalysisModel` to choose a separate model for planning, ranking candidates, and refining queries. Set `RESEARCH_MCP_OpenAI__AnswerModel` to choose a separate model for writing the answer.
+- Use `RESEARCH_MCP_OpenAI__TimeoutSeconds` to set the timeout per LLM call. `RESEARCH_MCP_OpenAI__TokenLimitField` accepts `max_tokens` or `max_completion_tokens`. Set `RESEARCH_MCP_OpenAI__UseJsonResponseFormat=true` to request structured JSON from compatible APIs.
 
-- `RESEARCH_MCP_OpenAI__AnalysisModel` peut remplacer le modèle pour la planification, le classement des candidats et les tours de recherche.
-- `RESEARCH_MCP_OpenAI__AnswerModel` peut remplacer le modèle de rédaction.
-- `RESEARCH_MCP_OpenAI__TimeoutSeconds` règle le délai par appel. `RESEARCH_MCP_OpenAI__TokenLimitField` accepte `max_tokens` ou `max_completion_tokens`. `RESEARCH_MCP_OpenAI__UseJsonResponseFormat=true` demande des objets JSON structurés à une API compatible.
+For a privately signed or self-signed HTTPS endpoint, place its public PEM certificate in `certificates/` with a `.crt` extension and recreate the container. The certificate must cover the hostname or IP address in `BaseUrl`. The server sends excerpts from fetched pages and any supplied conversation history to the configured LLM.
 
-`research` attend le résultat dans le même appel. Les modes `speed`, `balanced` et `quality` utilisent jusqu’à 1, 2 et 3 tours. Pour une question de suivi, transmets `history` avec les tours précédents (`question`, `answer`, `sources`). Chaque source d’un ancien tour contient `index`, `title` et `url`.
+The `speed`, `balanced`, and `quality` modes run up to one, two, and three research rounds, respectively. Each tool call waits for its result. For follow-up questions, pass previous turns in `history` with `question`, `answer`, and `sources`. Each previous source includes an `index`, `title`, and `url`.
 
-### Moteurs et Tor
+## Search engines and Tor
 
-La [configuration SearXNG](deploy/searxng/settings.yml) est embarquée dans l’image. Elle couvre le web généraliste, les actualités, la recherche scientifique, le code, les discussions, YaCy et Ahmia. Pour demander un moteur précis, passe son nom à `web_search`. Par défaut, YaCy interroge son index local et les pairs de son réseau. Ahmia peut répondre lentement et dépend de son service distant et du réseau Tor. [API SearXNG](https://docs.searxng.org/dev/search_api.html)
+The [bundled SearXNG configuration](deploy/searxng/settings.yml) covers general search, news, academic research, code, and discussions. It also enables YaCy and Ahmia. Pass engine names in the `engines` argument to focus `web_search`. YaCy uses its local index and peer-to-peer network by default. Ahmia runs over Tor, so its availability and response time depend on the Tor network and the remote service.
 
-### Mode stdio pour le développement
+Docker Compose grants `NET_ADMIN` to install the firewall inside the container. Playwright runs under a dedicated user and makes outbound connections through the MCP server's filtering proxy, which checks for public addresses. The other services also run under dedicated users. The server loads Ahmia's blocklist before returning or fetching `.onion` URLs.
 
-Le binaire .NET reste utilisable via stdio à partir de l’hôte si tu fournis les services dont tu as besoin. Copie `appsettings.example.json`, adapte ses URL, puis lance `dotnet run -- --config ./appsettings.local.json`.
+## Development over stdio
+
+The .NET application also supports stdio. Copy `appsettings.example.json` to `appsettings.local.json`, configure the URLs of the services you want to use, and run the following command.
+
+```sh
+dotnet run -- --config ./appsettings.local.json
+```
 
 ## Tests
 
@@ -68,6 +83,6 @@ python tests/smoke_mcp.py
 python tests/smoke_docker.py
 ```
 
-L’option `--research` dans `smoke_docker.py` teste le vrai LLM configuré. L’option `--onion-url` accepte l’adresse d’une page publique `.onion` connue et teste aussi Ahmia. Il faut laisser Tor établir son premier circuit avant ce test.
+Run the Docker smoke test against a running container. Add `--research` to test the configured LLM or `--onion-url` followed by a known public `.onion` address to test both Tor page fetching and Ahmia search. Allow Tor to establish its first circuit before running the Tor test.
 
-[Licence MIT](LICENSE) · [Provenance et licences des dépendances](THIRD_PARTY_NOTICES.md)
+[MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
